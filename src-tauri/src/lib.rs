@@ -1,18 +1,49 @@
+mod diag;
 mod hidutil;
 mod keyboard;
 mod permissions;
 
 use keyboard::KeyboardEngine;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    Manager,
+    AppHandle, Manager,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_store::StoreExt;
 
 struct EngineState(Mutex<KeyboardEngine>);
+struct EngineStarted(Mutex<bool>);
+
+fn try_start_engine(app: &AppHandle) -> bool {
+    let started_state = app.state::<EngineStarted>();
+    let mut started = started_state.0.lock().unwrap();
+    if *started {
+        return true;
+    }
+
+    let engine_state = app.state::<EngineState>();
+    let mut engine = engine_state.0.lock().unwrap();
+
+    diag::log("trying to start engine...");
+    match engine.start() {
+        Ok(()) => {
+            diag::log("engine started OK, running hidutil remap...");
+            match hidutil::remap_capslock() {
+                Ok(()) => diag::log("hidutil remap OK"),
+                Err(e) => diag::log(&format!("hidutil remap FAILED: {e}")),
+            }
+            *started = true;
+            true
+        }
+        Err(e) => {
+            diag::log(&format!("engine start FAILED: {e}"));
+            false
+        }
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,7 +56,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(EngineState(Mutex::new(KeyboardEngine::new())))
+        .manage(EngineStarted(Mutex::new(false)))
         .setup(|app| {
+            diag::log("=== escctrl setup starting ===");
+
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
@@ -76,6 +110,8 @@ pub fn run() {
             let sep = PredefinedMenuItem::separator(app)?;
 
             let has_permission = permissions::check_accessibility();
+            diag::log(&format!("accessibility check: {has_permission}"));
+
             let perm_item = MenuItem::with_id(
                 app,
                 "open_accessibility",
@@ -109,6 +145,8 @@ pub fn run() {
                     &quit_item,
                 ],
             )?;
+
+            let perm_item_bg = perm_item.clone();
 
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
@@ -207,19 +245,23 @@ pub fn run() {
                 permissions::request_accessibility();
             }
 
-            {
-                let state = app.state::<EngineState>();
-                let mut engine = state.0.lock().unwrap();
-                match engine.start() {
-                    Ok(()) => {
-                        if let Err(e) = hidutil::remap_capslock() {
-                            log::error!("hidutil remap failed: {}", e);
+            let handle = app.handle().clone();
+            if !try_start_engine(&handle) {
+                std::thread::spawn(move || {
+                    diag::log("polling for accessibility permission...");
+                    loop {
+                        std::thread::sleep(Duration::from_secs(2));
+                        if permissions::check_accessibility() {
+                            diag::log("accessibility permission granted, starting engine");
+                            if try_start_engine(&handle) {
+                                let _ = perm_item_bg.set_text("Accessibility: Granted");
+                                let _ = perm_item_bg.set_enabled(false);
+                                diag::log("engine started via permission poll");
+                                break;
+                            }
                         }
                     }
-                    Err(e) => {
-                        log::error!("Keyboard engine failed: {}", e);
-                    }
-                }
+                });
             }
 
             Ok(())

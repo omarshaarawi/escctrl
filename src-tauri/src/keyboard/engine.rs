@@ -5,7 +5,7 @@ use core_graphics::event::{
 };
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     mpsc, Arc, Mutex,
 };
 use std::thread;
@@ -40,7 +40,11 @@ impl KeyboardEngine {
         let tracker = self.tracker.clone();
         let (tx, rx) = mpsc::channel::<Result<(), String>>();
 
+        let event_count = Arc::new(AtomicUsize::new(0));
+        let event_count_cb = event_count.clone();
+
         let handle = thread::spawn(move || {
+            crate::diag::log("engine thread: creating CGEventTap...");
             let tap = CGEventTap::new(
                 CGEventTapLocation::HID,
                 CGEventTapPlacement::HeadInsertEventTap,
@@ -51,6 +55,13 @@ impl KeyboardEngine {
                     CGEventType::FlagsChanged,
                 ],
                 move |_proxy, event_type, event| {
+                    let n = event_count_cb.fetch_add(1, Ordering::Relaxed);
+                    if n == 0 {
+                        crate::diag::log(&format!(
+                            "first event in callback: type={:?}",
+                            event_type
+                        ));
+                    }
                     if !enabled.load(Ordering::Relaxed) {
                         return CallbackResult::Keep;
                     }
@@ -59,8 +70,12 @@ impl KeyboardEngine {
             );
 
             let tap = match tap {
-                Ok(tap) => tap,
+                Ok(tap) => {
+                    crate::diag::log("engine thread: CGEventTap created OK");
+                    tap
+                }
                 Err(()) => {
+                    crate::diag::log("engine thread: CGEventTap creation FAILED");
                     let _ = tx.send(Err(
                         "CGEventTap creation failed. Grant Accessibility permission.".into(),
                     ));
@@ -167,7 +182,7 @@ fn handle_event(
         }
 
         CGEventType::TapDisabledByTimeout => {
-            log::warn!("event tap disabled by timeout");
+            crate::diag::log("EVENT TAP DISABLED BY TIMEOUT");
             CallbackResult::Keep
         }
 

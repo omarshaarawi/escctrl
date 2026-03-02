@@ -1,6 +1,6 @@
 [package]
 name = "escctrl"
-version = "1.0.2"
+version = "1.0.3"
 description = "Caps Lock → Ctrl (hold) / Escape (tap)"
 authors = ["Omar Shaarawi"]
 edition = "2021"

@@ -17,7 +17,7 @@ use tauri_plugin_store::StoreExt;
 struct EngineState(Mutex<KeyboardEngine>);
 struct EngineStarted(Mutex<bool>);
 
-fn try_start_engine(app: &AppHandle) -> bool {
+fn try_start_engine(app: &AppHandle, log: bool) -> bool {
     let started_state = app.state::<EngineStarted>();
     let mut started = started_state.0.lock().unwrap();
     if *started {
@@ -27,10 +27,9 @@ fn try_start_engine(app: &AppHandle) -> bool {
     let engine_state = app.state::<EngineState>();
     let mut engine = engine_state.0.lock().unwrap();
 
-    diag::log("trying to start engine...");
     match engine.start() {
         Ok(()) => {
-            diag::log("engine started OK, running hidutil remap...");
+            diag::log("engine started, running hidutil remap...");
             match hidutil::remap_capslock() {
                 Ok(()) => diag::log("hidutil remap OK"),
                 Err(e) => diag::log(&format!("hidutil remap FAILED: {e}")),
@@ -39,7 +38,9 @@ fn try_start_engine(app: &AppHandle) -> bool {
             true
         }
         Err(e) => {
-            diag::log(&format!("engine start FAILED: {e}"));
+            if log {
+                diag::log(&format!("engine start failed: {e}"));
+            }
             false
         }
     }
@@ -109,18 +110,11 @@ pub fn run() {
 
             let sep = PredefinedMenuItem::separator(app)?;
 
-            let has_permission = permissions::check_accessibility();
-            diag::log(&format!("accessibility check: {has_permission}"));
-
             let perm_item = MenuItem::with_id(
                 app,
                 "open_accessibility",
-                if has_permission {
-                    "Accessibility: Granted"
-                } else {
-                    "Accessibility: Open Settings..."
-                },
-                !has_permission,
+                "Accessibility: Open Settings...",
+                true,
                 None::<&str>,
             )?;
 
@@ -241,24 +235,22 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            if !has_permission {
-                permissions::request_accessibility();
-            }
+            permissions::request_accessibility();
 
             let handle = app.handle().clone();
-            if !try_start_engine(&handle) {
+            if try_start_engine(&handle, true) {
+                let _ = perm_item.set_text("Accessibility: Granted");
+                let _ = perm_item.set_enabled(false);
+            } else {
                 std::thread::spawn(move || {
-                    diag::log("polling for accessibility permission...");
+                    diag::log("waiting for accessibility permission...");
                     loop {
                         std::thread::sleep(Duration::from_secs(2));
-                        if permissions::check_accessibility() {
-                            diag::log("accessibility permission granted, starting engine");
-                            if try_start_engine(&handle) {
-                                let _ = perm_item_bg.set_text("Accessibility: Granted");
-                                let _ = perm_item_bg.set_enabled(false);
-                                diag::log("engine started via permission poll");
-                                break;
-                            }
+                        if try_start_engine(&handle, false) {
+                            let _ = perm_item_bg.set_text("Accessibility: Granted");
+                            let _ = perm_item_bg.set_enabled(false);
+                            diag::log("engine started after permission granted");
+                            break;
                         }
                     }
                 });

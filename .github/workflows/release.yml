@@ -25,6 +25,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: tauri
+          save-if: false
 
       - run: npm install
 

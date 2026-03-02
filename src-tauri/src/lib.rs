@@ -22,6 +22,7 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(EngineState(Mutex::new(KeyboardEngine::new())))
         .setup(|app| {
@@ -87,6 +88,9 @@ pub fn run() {
                 None::<&str>,
             )?;
 
+            let update_item =
+                MenuItem::with_id(app, "check_update", "Check for Updates", true, None::<&str>)?;
+
             let sep2 = PredefinedMenuItem::separator(app)?;
 
             let quit_item =
@@ -100,6 +104,7 @@ pub fn run() {
                     &autostart_item,
                     &sep,
                     &perm_item,
+                    &update_item,
                     &sep2,
                     &quit_item,
                 ],
@@ -155,6 +160,38 @@ pub fn run() {
                             let _ = std::process::Command::new("open")
                                 .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
                                 .spawn();
+                        }
+
+                        "check_update" => {
+                            let handle = app.clone();
+                            let item = update_item.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let updater = match tauri_plugin_updater::UpdaterExt::updater(&handle) {
+                                    Ok(u) => u,
+                                    Err(e) => {
+                                        log::error!("Updater init failed: {e}");
+                                        return;
+                                    }
+                                };
+                                match updater.check().await {
+                                    Ok(Some(update)) => {
+                                        let _ = item.set_text("Downloading...");
+                                        let _ = item.set_enabled(false);
+                                        if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
+                                            log::error!("Update failed: {e}");
+                                            let _ = item.set_text("Update failed");
+                                            let _ = item.set_enabled(true);
+                                        }
+                                    }
+                                    Ok(None) => {
+                                        let _ = item.set_text("Up to date");
+                                    }
+                                    Err(e) => {
+                                        log::error!("Update check failed: {e}");
+                                        let _ = item.set_text("Check failed");
+                                    }
+                                }
+                            });
                         }
 
                         "quit" => {

@@ -1,5 +1,4 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicklama/tauri-apps/tauri-v2/packages/api/schema.json",
   "productName": "escctrl",
   "version": "0.1.0",
   "identifier": "com.omarshaarawi.escctrl",
@@ -22,6 +21,14 @@
     "macOS": {
       "minimumSystemVersion": "12.0"
     },
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc0NTQ5QTI4MkI0OUEyNDMKUldSRG9ra3JLSnBVZEJ0Yk1Tdkl6NmdRdlJuY2V0dHljNjZJS1ZMR0pVOGE3Tit6MTBPZFpzeW4K",
+      "endpoints": [
+        "https://github.com/omarshaarawi/escctrl/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

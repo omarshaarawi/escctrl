@@ -1,0 +1,14 @@
+{
+  "identifier": "default",
+  "description": "Default capability for escctrl",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "updater:default",
+    "store:default",
+    "process:default"
+  ]
+}

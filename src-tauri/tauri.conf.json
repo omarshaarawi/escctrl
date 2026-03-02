@@ -25,7 +25,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc0NTQ5QTI4MkI0OUEyNDMKUldSRG9ra3JLSnBVZEJ0Yk1Tdkl6NmdRdlJuY2V0dHljNjZJS1ZMR0pVOGE3Tit6MTBPZFpzeW4K",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZEQ0U1MzMwRkE4NjU1NUEKUldSYVZZYjZNRlBPL2RUSUxVMGY5cEdUb3hJSVpEVjVPWUxQTi81YXRReFVDL3UzSFNPcE1TTVkK",
       "endpoints": [
         "https://github.com/omarshaarawi/escctrl/releases/latest/download/latest.json"
       ]

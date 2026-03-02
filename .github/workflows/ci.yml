@@ -25,5 +25,5 @@ jobs:
 
       - run: npm install
 
-      - run: cargo check --target universal-apple-darwin
+      - run: cargo check --target aarch64-apple-darwin
         working-directory: src-tauri

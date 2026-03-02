@@ -6,7 +6,7 @@ use core_graphics::event::{
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+    mpsc, Arc, Mutex,
 };
 use std::thread;
 
@@ -38,6 +38,7 @@ impl KeyboardEngine {
         let enabled = self.enabled.clone();
         let escape_on_tap = self.escape_on_tap.clone();
         let tracker = self.tracker.clone();
+        let (tx, rx) = mpsc::channel::<Result<(), String>>();
 
         let handle = thread::spawn(move || {
             let tap = CGEventTap::new(
@@ -60,9 +61,9 @@ impl KeyboardEngine {
             let tap = match tap {
                 Ok(tap) => tap,
                 Err(()) => {
-                    log::error!(
-                        "Failed to create CGEventTap. Grant Accessibility permission."
-                    );
+                    let _ = tx.send(Err(
+                        "CGEventTap creation failed. Grant Accessibility permission.".into(),
+                    ));
                     return;
                 }
             };
@@ -76,11 +77,15 @@ impl KeyboardEngine {
             }
 
             tap.enable();
+            let _ = tx.send(Ok(()));
             CFRunLoop::run_current();
         });
 
-        self.thread_handle = Some(handle);
-        Ok(())
+        let result = rx.recv().map_err(|e| e.to_string())?;
+        if result.is_ok() {
+            self.thread_handle = Some(handle);
+        }
+        result
     }
 
     pub fn set_enabled(&self, val: bool) {

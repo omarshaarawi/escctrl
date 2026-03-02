@@ -207,15 +207,18 @@ pub fn run() {
                 permissions::request_accessibility();
             }
 
-            if let Err(e) = hidutil::remap_capslock() {
-                log::error!("Failed to remap Caps Lock via hidutil: {}", e);
-            }
-
             {
                 let state = app.state::<EngineState>();
                 let mut engine = state.0.lock().unwrap();
-                if let Err(e) = engine.start() {
-                    log::error!("Failed to start keyboard engine: {}", e);
+                match engine.start() {
+                    Ok(()) => {
+                        if let Err(e) = hidutil::remap_capslock() {
+                            log::error!("hidutil remap failed: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Keyboard engine failed: {}", e);
+                    }
                 }
             }
 

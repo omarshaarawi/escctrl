@@ -3,31 +3,25 @@ name: CI
 on:
   push:
     branches: [main]
+  pull_request:
 
 jobs:
-  check:
-    runs-on: macos-latest
+  build:
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
+      - name: Toolchain
+        run: swift --version
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Build
+        run: swift build -c release
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          shared-key: tauri-release
+      - name: Test
+        run: swift test
 
-      - run: npm install
+      - name: Bundle (ad-hoc signed)
+        run: scripts/bundle.sh --release
 
-      - run: cargo build --release --target aarch64-apple-darwin
-        working-directory: src-tauri
-
-      - run: cargo build --release --target x86_64-apple-darwin
-        working-directory: src-tauri
+      - name: Verify signature
+        run: codesign --verify --deep --strict --verbose=2 dist/escctrl.app

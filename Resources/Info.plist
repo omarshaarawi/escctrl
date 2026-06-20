@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>escctrl</string>
+	<key>CFBundleDisplayName</key>
+	<string>escctrl</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.omarshaarawi.escctrl</string>
+	<key>CFBundleExecutable</key>
+	<string>escctrl</string>
+	<key>CFBundleIconFile</key>
+	<string>escctrl</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__BUILD__</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>MIT License</string>
+
+	<!-- Headless agent: no Dock icon, no menu bar item, no windows. Controlled via the CLI. -->
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+
+	<!-- Sparkle auto-update. Generate the EdDSA key pair with Sparkle's `generate_keys` and
+	     paste the public key below; the matching private key signs releases in CI. -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/omarshaarawi/escctrl/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>oUA8DFVp8ThIbwbIicWlfRYgccFTcar4NKyeuR6cmAo=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+</dict>
+</plist>

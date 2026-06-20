@@ -2,43 +2,86 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+# Required repository secret:
+#   SPARKLE_PRIVATE_KEY   EdDSA private key from Sparkle's `generate_keys -x` (its public half is
+#                         already committed in Resources/Info.plist → SUPublicEDKey)
+#
+# Builds are ad-hoc signed (no Apple Developer account). Sparkle auto-updates still work because
+# they're gated on the EdDSA signature, not on code signing. The FIRST manual install hits
+# Gatekeeper (right-click → Open, once); updates Sparkle installs afterward launch normally.
 
 jobs:
-  build:
-    runs-on: macos-latest
-    permissions:
-      contents: write
+  release:
+    runs-on: macos-15
+    env:
+      APP: dist/escctrl.app
+      SPARKLE_VERSION: "2.9.3"
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          fetch-depth: 0 # full history so the build number (commit count) is correct
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Derive version
+        id: ver
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          shared-key: tauri-release
-          save-if: false
-
-      - run: npm install
-
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build & bundle (ad-hoc, universal)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          BUILD: ${{ steps.ver.outputs.build }}
+        run: scripts/bundle.sh --release --universal
+
+      - name: Package release archive
+        run: ditto -c -k --keepParent "$APP" escctrl.zip
+
+      - name: Sign update with Sparkle
+        id: sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          curl -fsSL -o sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir sparkle && tar -xf sparkle.tar.xz -C sparkle
+          SIGN_UPDATE="$(find sparkle -name sign_update -type f | head -1)"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > sparkle_key
+          # sign_update prints:  sparkle:edSignature="…" length="…"
+          FRAGMENT="$("$SIGN_UPDATE" escctrl.zip -f sparkle_key)"
+          rm -f sparkle_key
+          echo "fragment=$FRAGMENT" >> "$GITHUB_OUTPUT"
+
+      - name: Generate appcast
+        run: |
+          cat > appcast.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>escctrl</title>
+              <item>
+                <title>${{ steps.ver.outputs.version }}</title>
+                <sparkle:version>${{ steps.ver.outputs.build }}</sparkle:version>
+                <sparkle:shortVersionString>${{ steps.ver.outputs.version }}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+                <enclosure
+                  url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/escctrl.zip"
+                  ${{ steps.sparkle.outputs.fragment }}
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          EOF
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
         with:
-          tagName: v__VERSION__
-          releaseName: "escctrl v__VERSION__"
-          releaseBody: "See the assets below."
-          releaseDraft: true
-          prerelease: false
-          args: "--target universal-apple-darwin"
+          draft: true
+          name: escctrl ${{ github.ref_name }}
+          files: |
+            escctrl.zip
+            appcast.xml
